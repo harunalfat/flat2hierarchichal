@@ -1,8 +1,10 @@
-import com.google.gson.Gson;
+package id.alfat;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import com.esotericsoftware.yamlbeans.YamlWriter;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import java.io.*;
 import java.util.*;
 
 /**
@@ -16,14 +18,29 @@ public class Flat2Hierarchical {
 
         String filePath = "application.properties";
         try {
-            Files.lines(Paths.get(new Flat2Hierarchical()
-                    .readFile(filePath)))
-                    .forEach((line) -> {
-                        Character firstChar = null;
-                        if (line.length() > 0) firstChar = line.charAt(0);
-                        if (firstChar != null && firstChar != '#' && firstChar != '\n') appendToMap(line);
-                    });
-            System.out.print(new Gson().toJson(valueMap));
+            final InputStream inputStream = new FileInputStream(filePath);
+            final BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+
+            String line;
+            while ((line = reader.readLine()) != null){
+                Character firstChar = null;
+                if (line.length() > 0) firstChar = line.charAt(0);
+                if (firstChar != null && firstChar != '#' && firstChar != '\n') appendToMap(line);
+            }
+
+            inputStream.close();
+            reader.close();
+
+            cleanAllArray(valueMap);
+            Writer writer = new FileWriter(filePath + ".yml");
+            YamlWriter yamlWriter = new YamlWriter(writer);
+            yamlWriter.write(valueMap);
+            yamlWriter.close();
+
+            writer = new FileWriter(filePath + ".json");
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            gson.toJson(valueMap, writer);
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -117,6 +134,26 @@ public class Flat2Hierarchical {
             return -1;
 
         return openBracketPosition;
+    }
+
+    private static void cleanAllArray(Map<String, Object> map){
+        for (Map.Entry<String, Object> kv : map.entrySet()){
+            Object[] cleaned = null;
+            if (kv.getValue() instanceof Map)
+                cleanAllArray((Map<String, Object>) kv.getValue());
+            else if (kv.getValue() instanceof Object[])
+                cleaned = cleanAllArray((Object[])kv.getValue());
+            if (cleaned != null) kv.setValue(cleaned);
+        }
+    }
+
+    private static Object[] cleanAllArray(Object[] objects){
+        for (int i = 0; i < objects.length; i++)
+            if (objects[i] instanceof Map)
+                cleanAllArray((Map<String, Object>) objects[i]);
+            else if (objects[i] instanceof Object[])
+                cleanAllArray((Object[]) objects[i]);
+        return cleanNull(objects);
     }
 
     private static Object[] cleanNull(final Object[] items){
